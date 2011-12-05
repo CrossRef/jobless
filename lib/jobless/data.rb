@@ -15,7 +15,11 @@ module Jobless
     key :started_at, Time
     key :finished_at, Time
 
-    def self.next kinds, context=self, &block
+    def self.register kind, work
+      Job.create({:kind => kind, :work => work})
+    end
+
+    def self.next kinds, context, &block
       opts = {
         :query => {:kind => {"$in" => kinds}, :started => false},
         :update => {
@@ -29,7 +33,8 @@ module Jobless
         mapper_doc = new(doc)
         begin
           Worker.check_in "working"
-          context.instance_exec(mapper_doc[:work], &block)
+          context.work = mapper_doc[:work]
+          yield(context)
           mapper_doc.completed = true
           
         rescue StandardError => e
@@ -82,7 +87,7 @@ module Jobless
       begin
         if kinds.nil? || kinds.empty?
           check_in "working"
-          context.instance_eval(&block)
+          yield(context)
         else
           work_loop kinds, options, &block
         end

@@ -76,7 +76,21 @@ module Jobless
     end
   end
 
+  module Work
+    # Get at that work!
+    attr_accessor :work
+    
+    def has_work?
+      @work.nil?
+    end
+  end
+
   module Base
+    # Register a new job.
+    def job kind, work
+      Job.register kind, work
+    end
+    
     # Shorthand for a worker without tags. The worker will execute
     # once and then terminate.
     def task options={}, &block
@@ -98,6 +112,7 @@ module Jobless
 
   class Application
     include Base
+    include Work
     include Logging
     include Configuration
   end
@@ -115,7 +130,7 @@ module Jobless
       end
     end
 
-    delegate :task, :periodic, :worker, :configure
+    delegate :job, :task, :periodic, :worker, :configure
 
     class << self
       attr_accessor :target
