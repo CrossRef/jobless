@@ -19,7 +19,7 @@ module Jobless
       Job.create({:kind => kind, :work => work})
     end
 
-    def self.next kinds, context, &block
+    def self.next kinds, &block
       opts = {
         :query => {:kind => {"$in" => kinds}, :started => false},
         :update => {
@@ -33,8 +33,7 @@ module Jobless
         mapper_doc = new(doc)
         begin
           Worker.check_in "working"
-          context.work = mapper_doc[:work]
-          yield(context)
+          yield(mapper_doc[:work])
           mapper_doc.completed = true
           
         rescue StandardError => e
@@ -74,20 +73,20 @@ module Jobless
       end
     end
 
-    def self.work_loop kind, context=self, options={}, &block
+    def self.work_loop kinds, options={}, &block
       options = {:affinity => 20}.merge(options)
       while true
-        sleep(options[:affinity]) unless Job.next(kinds, context, &block)
+        sleep(options[:affinity]) unless Job.next(kinds, &block)
       end
     end
 
-    def self.work kinds=nil, context=self, options={}, &block
+    def self.work kinds=nil, options={}, &block
       at_exit { terminate }
       check_in "ready"
       begin
         if kinds.nil? || kinds.empty?
           check_in "working"
-          yield(context)
+          yield
         else
           work_loop kinds, options, &block
         end
@@ -175,6 +174,7 @@ module Jobless
   end
 
   def self.prepare settings
+    puts "setting db name to #{settings.db_host}"
     MongoMapper.connection = Mongo::Connection.new(settings.db_host)
     MongoMapper.database = settings.db_name
 

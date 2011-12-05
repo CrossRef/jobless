@@ -24,12 +24,15 @@ module Jobless
     private
     
     def log level, obj
-      if @params[:logger].class == Proc
-        @params[:logger].call(level, obj)
-      elsif @params[:logger] == :console
+      logger = settings.logger
+      if logger.class == Proc
+        logger.call(level, obj)
+      elsif logger == :console
         puts "#{level.to_s}: #{obj.to_s}"
-      else
+      elsif logger == :database
         LogLine.method(level).call(obj)
+      else
+        raise StandardError.new("Unknown logger type #{logger.to_s}")
       end
     end
   end
@@ -59,6 +62,7 @@ module Jobless
   
     def configure &block
       instance_eval(&block)
+      Jobless.prepare settings
     end
 
     def set name, val
@@ -76,15 +80,6 @@ module Jobless
     end
   end
 
-  module Work
-    # Get at that work!
-    attr_accessor :work
-    
-    def has_work?
-      @work.nil?
-    end
-  end
-
   module Base
     # Register a new job.
     def job kind, work
@@ -94,25 +89,23 @@ module Jobless
     # Shorthand for a worker without tags. The worker will execute
     # once and then terminate.
     def task options={}, &block
-      worker([], self, options, &block)
+      worker([], options, &block)
     end
 
     # Shorthand for a worker without tags and a force_period set to
     # the given period.
     def periodic period, options={}, &block
-      worker([], self, options.merge({:with_period => period}), &block)
+      worker([], options.merge({:with_period => period}), &block)
     end
       
     def worker tags=[], options={}, &block
-      Jobless.prepare(settings)
       tags = [tags] unless tags.class == Array
-      Worker.work(tags, self, options, &block)
+      Worker.work(tags, options, &block)
     end
   end
 
   class Application
     include Base
-    include Work
     include Logging
     include Configuration
   end
@@ -130,7 +123,8 @@ module Jobless
       end
     end
 
-    delegate :job, :task, :periodic, :worker, :configure
+    delegate :job, :task, :periodic, :worker, :configure, :settings,
+             :warn, :debug, :error, :info
 
     class << self
       attr_accessor :target
